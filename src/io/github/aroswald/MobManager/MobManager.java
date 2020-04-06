@@ -8,8 +8,10 @@ import org.bukkit.World;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Creeper;
 import org.bukkit.entity.Drowned;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Husk;
 import org.bukkit.entity.PigZombie;
 import org.bukkit.entity.Player;
@@ -19,6 +21,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.CreeperPowerEvent;
+import org.bukkit.event.entity.ExplosionPrimeEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
@@ -37,11 +41,71 @@ public class MobManager extends JavaPlugin implements Listener{
 	public void onDisable() {
 		HandlerList.unregisterAll();
 	}
+	
 	@EventHandler
 	public void onCreatureSpawn(CreatureSpawnEvent e) {
 		boolean remove = checkEntity(e.getEntity());
 		if(remove) e.setCancelled(true);
 	}
+	public void onCreeperPower(CreeperPowerEvent e) {
+		if(!config.getBoolean("poweredcreeper")) {
+			e.setCancelled(true);
+		}
+	}
+	@EventHandler
+	public void onExplosionPrime(ExplosionPrimeEvent e) {
+		if(e.getEntityType()==EntityType.CREEPER) {
+			if(!config.getBoolean("creeperexplode")) {
+				e.setCancelled(true);
+			}
+		}
+	}
+	@EventHandler	
+	public void onPlayerChat(AsyncPlayerChatEvent e){
+		String message = e.getMessage().toLowerCase();
+		Player p = e.getPlayer();
+		//p.sendMessage("message is " + message + ".");
+		//p.sendMessage("index of mmset is " + message.indexOf("mmset", 0));
+		//if(p.isOp()){p.sendMessage(p.getName() + "is Op");}
+		if((message.indexOf("mmset",0) == 0) && (p.isOp())) {
+			boolean pass = true;
+			int start=6;
+			int end=message.indexOf(' ', start);
+			//p.sendMessage("end index is "+ end +".");
+			
+			String mob=message.substring(start,end);
+			//p.sendMessage("mob is "+ mob + ".");
+			if (!config.isSet(mob)) {
+				p.sendMessage(mob +" is not recognized by the config file.");
+				pass=false;
+			}
+			
+			String bool=message.substring(end+1,message.length());
+			//p.sendMessage("bool is " + bool + ".");
+			boolean value = false;
+			if((bool.equals("true")) || (bool.equals("false"))){
+				if(bool =="true")value=true;
+				if(bool =="false")value=false;
+			}else {
+				p.sendMessage("value must be either true or false");
+				pass=false;
+			}
+			if(pass) {
+				config.set(mob,value);
+				try{
+					config.save(configFile);
+				}
+				catch(IOException ex) {
+					ex.printStackTrace();
+				}
+				p.sendMessage(mob + " has been set to " + bool);
+				if(!value) {
+					clean();
+				}
+			}
+		}
+	}
+
 	public boolean checkEntity(Entity e) {
 		boolean remove = false;
 		switch(e.getType()) {
@@ -99,7 +163,13 @@ public class MobManager extends JavaPlugin implements Listener{
 		case CREEPER:
 			if(!config.getBoolean("creeper")){
 				remove=true;
-			}	
+			}
+			if(!config.getBoolean("poweredcreeper")) {
+				Creeper c = (Creeper)e;
+				if(c.isPowered()) {
+					c.setPowered(false);
+				}
+			}
 			break;
 		case DOLPHIN:
 			if(!config.getBoolean("dolphin")){
@@ -419,51 +489,6 @@ public class MobManager extends JavaPlugin implements Listener{
 		}
 	}
 
-	@EventHandler	
-	public void onPlayerChat(AsyncPlayerChatEvent e){
-		String message = e.getMessage().toLowerCase();
-		Player p = e.getPlayer();
-		//p.sendMessage("message is " + message + ".");
-		//p.sendMessage("index of mmset is " + message.indexOf("mmset", 0));
-		//if(p.isOp()){p.sendMessage(p.getName() + "is Op");}
-		if((message.indexOf("mmset",0) == 0) && (p.isOp())) {
-			boolean pass = true;
-			int start=6;
-			int end=message.indexOf(' ', start);
-			//p.sendMessage("end index is "+ end +".");
-			
-			String mob=message.substring(start,end);
-			//p.sendMessage("mob is "+ mob + ".");
-			if (!config.isSet(mob)) {
-				p.sendMessage(mob +" is not recognized by the config file.");
-				pass=false;
-			}
-			
-			String bool=message.substring(end+1,message.length());
-			//p.sendMessage("bool is " + bool + ".");
-			boolean value = false;
-			if((bool.equals("true")) || (bool.equals("false"))){
-				if(bool =="true")value=true;
-				if(bool =="false")value=false;
-			}else {
-				p.sendMessage("value must be either true or false");
-				pass=false;
-			}
-			if(pass) {
-				config.set(mob,value);
-				try{
-					config.save(configFile);
-				}
-				catch(IOException ex) {
-					ex.printStackTrace();
-				}
-				p.sendMessage(mob + " has been set to " + bool);
-				if(!value) {
-					clean();
-				}
-			}
-		}
-	}
 	private void addConfigDefaults() {
 		//passive mobs
 		config.set("bat"			, true);
@@ -508,7 +533,8 @@ public class MobManager extends JavaPlugin implements Listener{
 		//Hostile Mobs
 		config.set("blaze"			, true);
 		config.set("chickenjockey"	, true);	
-		config.set("creeper"		, true);	
+		config.set("creeper"		, true);
+		config.set("poweredcreeper"	, true);
 		config.set("drowned"		, true);
 		config.set("babydrowned"	, true);
 		config.set("elderguardian"	, true);	
@@ -539,7 +565,8 @@ public class MobManager extends JavaPlugin implements Listener{
 		//Boss Mobs
 		config.set("enderdragon"	, true);
 		config.set("wither"			, true);
-		
+		//other settings
+		config.set("creeperexplode"	, true);
 		try{
 			config.save(configFile);
 		}
